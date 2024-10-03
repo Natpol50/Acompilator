@@ -1,30 +1,139 @@
 #!/bin/bash
-echo "###############################"
-echo "#      COMPIL ARDUINO        #"
-echo "###############################"
 
-BAUDRATE="115200"   
+# -----------------------------------------------------------------------------
+#  Acompilator.sh
+#  Copyright (c) 2024 Asha the Fox 🦊
+#  All rights reserved.
+#
+#  This is the main script for Acompilator
+#  The goal of this script is to compile and upload scripts to one or multiple arduino UNO (mostly multiples for easy deployment).
+#  The script is divided into several parts:
+#      Boot - Code to initialize the script and check requirements.
+#      Configuration - Load configuration options or variables.
+#      Main Tasks - The main operations the script will perform.
+#      Cleanup - Actions taken after the main operations, like logging or cleanup.
+#
+# -----------------------------------------------------------------------------
+
+# Some metadata
+AUTHOR="Asha Geyon (Natpol50)"
+VERSION="0.1"
+LAST_REVISION="2024-10-03"
+
+# /////////////////
+# //////SETUP//////
+# /////////////////
+
+BAUDRATE="115200"
+ARGS_LIST=()
 FOLDER=""
+SELECTION=()
+ANSWER=""
 
-# Traitement des arguments de ligne de commande
-for i in "$@"; do
-    case $i in
-        -f=*)
-        FOLDER="${i#*=}"
-        shift
-        ;;
-        -p=*)
-        PORT="${i#*=}"
-        shift
-        ;;
-        -b=*)
-        BAUDRATE="${i#*=}"
-        shift
-        ;;
-    esac
+LOG_FILE="logs/Y%m%d-%H%M%S.log"
+rm -rf logs
+mkdir logs
+
+# /////////////////
+# ////FUNCTIONS////
+# /////////////////
+
+log() { # A function used to log a message
+    local message="$1"
+    local timestamp
+    timestamp=$(date +"%Y-%m-%d %H:%M:%S") # Format de date/heure
+    echo "$timestamp: $message" >> "$LOG_FILE"
+}
+
+x_in_array() { # A Function allowing us to verify if something's in an array
+    local element="$1"
+    shift  
+    local array=("$@")
+    
+    for item in "${array[@]}"; do
+        if [[ "$item" == "$element" ]]; then
+            return 0  # L'élément est trouvé
+        fi
+    done
+    return 1  # L'élément n'est pas trouvé
+}
+
+
+
+# /////////////////
+# ////ARGUMENTS////
+# /////////////////
+
+
+# First, we extract all arguments (and values for folder and card selection)
+for arg in "$@"; do
+    ARGS_LIST+=("${arg%%=*}")
+    if [ "${ARGS_LIST[-1]}" == "-p" ]; then
+        FOLDER="${arg#*=}"
+    elif [ "${ARGS_LIST[-1]}" == "-n" ]; then
+        SELECTION="${arg#*=}"
+    fi
 done
 
-# Définition du dossier de travail
+# [DEBUG, will be cut] then, we display all arguments received  
+echo -e "\033[31m [DEBUG, will be cut] \033[0m Arguments collected in the list:"
+for name in "${ARGS_LIST[@]}"; do
+    echo "$name"
+done
+echo "FOLDER value is : $FOLDER"
+echo "SELECTION value is : $SELECTION"
+
+# Vérification de la présence de l'argument -v
+if x_in_array "-v" "${ARGS_LIST[@]}"; then
+    if [ ${#ARGS_LIST[@]} -gt 1 ]; then
+        echo "-v not understood in combination with other arguments"
+        exit 1
+    fi
+
+    echo -e "
+    \033[32m
+ █████╗        ██████╗ ██████╗ ███╗   ███╗██████╗ ██╗██╗     
+██╔══██╗      ██╔════╝██╔═══██╗████╗ ████║██╔══██╗██║██║     
+███████║█████╗██║     ██║   ██║██╔████╔██║██████╔╝██║██║     
+██╔══██║╚════╝██║     ██║   ██║██║╚██╔╝██║██╔═══╝ ██║██║     
+██║  ██║      ╚██████╗╚██████╔╝██║ ╚═╝ ██║██║     ██║███████╗
+╚═╝  ╚═╝       ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚═╝╚══════╝
+\033[0m
+
+Acompilator Version: \033[34m$VERSION\033[0m
+Developed by \033[34m Asha the fox \033[0m
+
+Last Revision: \033[34m$LAST_REVISION\033[0m
+Last Revision by : \033[34m$AUTHOR\033[0m
+    "
+    exit 0
+fi
+
+
+
+
+
+
+# /////////////////
+# ///ACTUAL CODE///
+# /////////////////
+
+
+
+# Welcome banner
+echo -e "                     
+\033[32m
+ █████╗        ██████╗ ██████╗ ███╗   ███╗██████╗ ██╗██╗     
+██╔══██╗      ██╔════╝██╔═══██╗████╗ ████║██╔══██╗██║██║     
+███████║█████╗██║     ██║   ██║██╔████╔██║██████╔╝██║██║     
+██╔══██║╚════╝██║     ██║   ██║██║╚██╔╝██║██╔═══╝ ██║██║     
+██║  ██║      ╚██████╗╚██████╔╝██║ ╚═╝ ██║██║     ██║███████╗
+╚═╝  ╚═╝       ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚═╝╚══════╝
+\033[0m
+"
+
+
+
 if [ -z "$FOLDER" ]; then
     FOLDER=$(pwd)
     echo "Aucun paramètre valide ne semble avoir été passé. Utilisation du dossier courant : $FOLDER"
@@ -44,6 +153,7 @@ echo "###############################"
 echo "Partie 1, création de l'environnement"
 
 # Création ou réinitialisation des dossiers .tmp et build
+rm -rf .tmp build
 mkdir -p .tmp build
 
 echo "L'environnement a été créé"
@@ -85,7 +195,7 @@ echo "Partie 5, téléversement sur l'Arduino"
 
 echo "Voulez-vous téléverser cela sur l'arduino ? [Y/N]"
 read -r ANSWER
-if [ "$ANSWER" == "N" ]; then
+if [ "$ANSWER" == "N" ] || [ "$ANSWER" == "n" ]; then
     echo "Bon bah salut, bonne chance pour la suite"
     exit 0
 else
@@ -106,13 +216,14 @@ else
         for i in "${!boards[@]}"; do
             echo "$i: ${boards[i]}"
         done
-        echo "Veuillez sélectionner le numéro de l'Arduino à utiliser :"
-        read -r selection
 
-        while [[ ! "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 0 ] || [ "$selection" -ge ${#boards[@]} ]; do
-            echo "Sélection invalide."
+        while [[ ! "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 0 ] || [ "$SELECTION" -ge ${#boards[@]} ]; do
             echo "Veuillez sélectionner le numéro de l'Arduino à utiliser :"
             read -r selection
+            if [[ ! "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 0 ] || [ "$SELECTION" -ge ${#boards[@]} ]; then
+                echo "Sélection invalide."
+            fi
+
         done
 
 
