@@ -16,23 +16,26 @@
 # -----------------------------------------------------------------------------
 
 # Some metadata
-AUTHOR="Asha Geyon (Natpol50)"
-VERSION="0.1"
-LAST_REVISION="2024-10-03"
+readonly AUTHOR="Asha Geyon (Natpol50)"
+readonly VERSION="0.1"
+readonly LAST_REVISION="2024-10-03"
 
 # /////////////////
 # //////SETUP//////
 # /////////////////
 
-BAUDRATE="115200"
+readonly BAUDRATE="115200"
+readonly SUPPORTED_ARGS=(-v -p -y -boards -n -help -all) 
+readonly YESNOOPTIONS=("N" "n" "Y" "y")
 ARGS_LIST=()
 FOLDER=""
 SELECTION=()
 ANSWER=""
 
-LOG_FILE="logs/Y%m%d-%H%M%S.log"
-rm -rf logs
-mkdir logs
+readonly LOG_FILE="logs/$(date +'%Y%m%d-%H%M%S').log"
+if [ ! -d "logs" ]; then
+    mkdir logs
+fi
 
 # /////////////////
 # ////FUNCTIONS////
@@ -52,10 +55,10 @@ x_in_array() { # A Function allowing us to verify if something's in an array
     
     for item in "${array[@]}"; do
         if [[ "$item" == "$element" ]]; then
-            return 0  # L'élément est trouvé
+            return 0
         fi
     done
-    return 1  # L'élément n'est pas trouvé
+    return 1
 }
 
 
@@ -65,15 +68,24 @@ x_in_array() { # A Function allowing us to verify if something's in an array
 # /////////////////
 
 
+log "ACompilator started"
+
 # First, we extract all arguments (and values for folder and card selection)
 for arg in "$@"; do
     ARGS_LIST+=("${arg%%=*}")
-    if [ "${ARGS_LIST[-1]}" == "-p" ]; then
+    log "Got argument: ${ARGS_LIST[-1]}"
+    if ! x_in_array "${ARGS_LIST[-1]}" "${SUPPORTED_ARGS[@]}"; then
+        log "${ARGS_LIST[-1]} is not recognized by the script, exiting..."
+        echo -e "${ARGS_LIST[-1]} is not supported by current version of ACompil \n Are you sure you used the correct syntax ?"
+        exit 1
+    elif [ "${ARGS_LIST[-1]}" == "-p" ]; then
         FOLDER="${arg#*=}"
-    elif [ "${ARGS_LIST[-1]}" == "-n" ]; then
+    elif [ "${ARGS_LIST[-1]}" == "-boards" ]; then
         SELECTION="${arg#*=}"
     fi
 done
+log "FOLDER value is : $FOLDER"
+log "SELECTION value is : $SELECTION"
 
 # [DEBUG, will be cut] then, we display all arguments received  
 echo -e "\033[31m [DEBUG, will be cut] \033[0m Arguments collected in the list:"
@@ -83,10 +95,11 @@ done
 echo "FOLDER value is : $FOLDER"
 echo "SELECTION value is : $SELECTION"
 
-# Vérification de la présence de l'argument -v
+# -v argument check and handling
 if x_in_array "-v" "${ARGS_LIST[@]}"; then
     if [ ${#ARGS_LIST[@]} -gt 1 ]; then
-        echo "-v not understood in combination with other arguments"
+        log "-v not understood in combination with other arguments, exiting"
+        echo "-v not understood in combination with other arguments, exiting"
         exit 1
     fi
 
@@ -109,8 +122,17 @@ Last Revision by : \033[34m$AUTHOR\033[0m
     exit 0
 fi
 
-
-
+# -y and -n argument check and handling
+if x_in_array "-y" "${ARGS_LIST[@]}"; then
+    if x_in_array "-n" "${ARGS_LIST[@]}"; then
+        log "-y and -n argument conflicts, exiting"
+        echo "-y and -n argument conflicts, exiting"
+        exit 1
+    fi
+    ANWSER="Y"
+elif x_in_array "-n" "${ARGS_LIST[@]}"; then
+    ANWSER="N"
+fi
 
 
 
@@ -134,18 +156,25 @@ echo -e "
 
 
 
+
+# Folder decision making, will verify if exists and try to cd to it.
 if [ -z "$FOLDER" ]; then
     FOLDER=$(pwd)
-    echo "Aucun paramètre valide ne semble avoir été passé. Utilisation du dossier courant : $FOLDER"
+    log "No directory specified, will be using the current working directory"
+    echo -e "No directory, current working directory will be used"
 fi
 
-echo "Dossier de travail : $FOLDER"
-cd "$FOLDER" || { echo "Impossible de se déplacer dans $FOLDER."; exit 1; }
+log "working directory is $FOLDER"
+echo "working directory is $FOLDER"
 
 if [ ! -d "$FOLDER" ]; then
-    echo "Il semblerait que le dossier $FOLDER n'existe pas..."
+    log "$FOLDER was not found, exiting..."
+    echo "It seems that $FOLDER doesn't exists..."
     exit 1
 fi
+cd "$FOLDER" || { echo "Cannot access $FOLDER."; log "Cannot access folder"; exit 1; }
+
+
 
 ls -lai
 
@@ -193,8 +222,13 @@ echo "Compilation en un fichier HEX terminé"
 echo "###############################"
 echo "Partie 5, téléversement sur l'Arduino"
 
-echo "Voulez-vous téléverser cela sur l'arduino ? [Y/N]"
-read -r ANSWER
+while ! x_in_array "$ANSWER" "${YESNOOPTIONS[@]}"; do
+    echo "Voulez-vous téléverser cela sur l'arduino ? [Y/N]"
+    read -r ANSWER
+    if ! x_in_array "$ANSWER" "${YESNOOPTIONS[@]}"; then
+    echo "Answer is invalid. Please enter a new answer [Y/N]:"
+    fi
+done
 if [ "$ANSWER" == "N" ] || [ "$ANSWER" == "n" ]; then
     echo "Bon bah salut, bonne chance pour la suite"
     exit 0
