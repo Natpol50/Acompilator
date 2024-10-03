@@ -25,14 +25,33 @@ readonly LAST_REVISION="2024-10-03"
 # /////////////////
 
 readonly BAUDRATE="115200"
-readonly SUPPORTED_ARGS=(-v -p -y -boards -n -help -all) 
+readonly SUPPORTED_ARGS=(-v -p -y -boards -n -help -all -cleanup -nocleanup) 
 readonly YESNOOPTIONS=("N" "n" "Y" "y")
+readonly ORIGIN=$(pwd)
+
+
+readonly ARDUINO_CORE_PATH="/usr/share/arduino/hardware/arduino/avr/cores/arduino"
+readonly ARDUINO_COREUNO_PATH="/usr/share/arduino/hardware/arduino/avr/variants/standard"
+readonly BASE_LIB_DIR="$HOME/Arduino/libraries"
+USER_INSTALLED_LIB=""
+# Find all 'src' directories and add them to the USER_INSTALLED_LIB variable
+while IFS= read -r -d '' src_dir; do
+    USER_INSTALLED_LIB+=" ${src_dir}"
+done < <(find "$BASE_LIB_DIR" -type d -name "src" -print0)
+readonly USER_INSTALLED_LIB
+
+INCLUDE_OPTIONS=""
+for dir in "${INCLUDE_DIRS[@]}"; do
+    INCLUDE_OPTIONS+="-I $dir "
+done
+
+
 ARGS_LIST=()
 FOLDER=""
 SELECTION=()
 ANSWER=""
 
-readonly LOG_FILE="logs/$(date +'%Y%m%d-%H%M%S').log"
+readonly LOG_FILE="$ORIGIN/logs/$(date +'%Y%m%d-%H%M%S').log"
 if [ ! -d "logs" ]; then
     mkdir logs
 fi
@@ -107,7 +126,7 @@ if x_in_array "-v" "${ARGS_LIST[@]}"; then
     \033[32m
  █████╗        ██████╗ ██████╗ ███╗   ███╗██████╗ ██╗██╗     
 ██╔══██╗      ██╔════╝██╔═══██╗████╗ ████║██╔══██╗██║██║     
-███████║█████╗██║     ██║   ██║██╔████╔██║██████╔╝██║██║     
+███████║█████╗██║ 🦊  ██║   ██║██╔████╔██║██████╔╝██║██║     
 ██╔══██║╚════╝██║     ██║   ██║██║╚██╔╝██║██╔═══╝ ██║██║     
 ██║  ██║      ╚██████╗╚██████╔╝██║ ╚═╝ ██║██║     ██║███████╗
 ╚═╝  ╚═╝       ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚═╝╚══════╝
@@ -119,6 +138,7 @@ Developed by \033[34m Asha the fox \033[0m
 Last Revision: \033[34m$LAST_REVISION\033[0m
 Last Revision by : \033[34m$AUTHOR\033[0m
     "
+    log "printed version files"
     exit 0
 fi
 
@@ -129,11 +149,25 @@ if x_in_array "-y" "${ARGS_LIST[@]}"; then
         echo "-y and -n argument conflicts, exiting"
         exit 1
     fi
+    log "got -y arg, putting ANSWER as Y"
     ANWSER="Y"
 elif x_in_array "-n" "${ARGS_LIST[@]}"; then
+    log "got -n arg, putting ANSWER as N"
     ANWSER="N"
 fi
 
+if x_in_array "-cleanup" "${ARGS_LIST[@]}"; then
+    if x_in_array "-nocleanup" "${ARGS_LIST[@]}"; then
+        log "-cleanup and -nocleanup argument conflicts, exiting"
+        echo "-cleanup and -nocleanup argument conflicts, exiting"
+        exit 1
+    fi
+    log "got -cleanup arg, putting DOCLEAN as Y"
+    DOCLEAN="Y"
+elif x_in_array "-n" "${ARGS_LIST[@]}"; then
+    log "got -nocleanup arg, putting DOCLEAN as N"
+    DOCLEAN="N"
+fi
 
 
 # /////////////////
@@ -158,10 +192,11 @@ echo -e "
 
 
 # Folder decision making, will verify if exists and try to cd to it.
+cd
 if [ -z "$FOLDER" ]; then
-    FOLDER=$(pwd)
+    FOLDER=$ORIGIN
     log "No directory specified, will be using the current working directory"
-    echo -e "No directory, current working directory will be used"
+    echo -e "No directory specified, current working directory will be used"
 fi
 
 log "working directory is $FOLDER"
@@ -172,30 +207,46 @@ if [ ! -d "$FOLDER" ]; then
     echo "It seems that $FOLDER doesn't exists..."
     exit 1
 fi
-cd "$FOLDER" || { echo "Cannot access $FOLDER."; log "Cannot access folder"; exit 1; }
 
+cd "$FOLDER" || { echo "Cannot access $FOLDER. Do you have the right permissions ?"; log "Cannot access $FOLDER"; exit 1; }
 
+echo -e "\n \n Here's the content of the folder"
+ls -a
 
-ls -lai
+echo -e "\n \n###############################"
+echo "Part 1, Initializing environment..."
+
+# Environment initialization, should be in the starting working directory
+if [ -d "$ORIGIN/.tmp" ]; then
+    rm -rf "$ORIGIN/.tmp" || { echo "Cannot delete $ORIGIN/.tmp. Do you have the right permissions ?"; log "Couldn't  delete $ORIGIN/.tmp"; exit 1; }
+    log "$ORIGIN/.tmp deleted"
+fi
+mkdir "$ORIGIN/.tmp" || { echo "Cannot create $ORIGIN/.tmp. Do you have the right permissions ?"; log "Couldn't  create $ORIGIN/.tmp"; exit 1; }
+log "$ORIGIN/.tmp created"
+
+if [ -d "$ORIGIN/build" ]; then
+    rm -rf "$ORIGIN/build" || { echo "Cannot delete $ORIGIN/build. Do you have the right permissions ?"; log "Couldn't delete $ORIGIN/build"; exit 1; }
+    log "$ORIGIN/build deleted"
+fi
+mkdir "$ORIGIN/build" || { echo "Cannot create $ORIGIN/build. Do you have the right permissions ?"; log "Couldn't create $ORIGIN/build"; exit 1; }
+log "$ORIGIN/build created"
+
+echo "Environment initialized successfully !"
+
 
 echo "###############################"
-echo "Partie 1, création de l'environnement"
-
-# Création ou réinitialisation des dossiers .tmp et build
-rm -rf .tmp build
-mkdir -p .tmp build
-
-echo "L'environnement a été créé"
-
-echo "###############################"
-echo "Partie 2, compilation directe des fichiers à l'aide de avr-gcc"
+echo "Part 2, Compilation itself"
 
 # Création des fichiers objets pour chaque fichier C
+
+# Create object files for each C file
 filesO=""
+
+echo -e "Files will include : $ARDUINO_CORE_PATH  \n $ARDUINO_COREUNO_PATH \n $USER_INSTALLED_LIB"
 for c in *.c; do
     if [ -f "$c" ]; then
-        avr-gcc -Os -DF_CPU=16000000UL -mmcu=atmega328p -c "$c" -o ".tmp/${c%.*}.o"
-        filesO="$filesO .tmp/${c%.*}.o"
+        avr-gcc -Os -DF_CPU=16000000UL -mmcu=atmega328p -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" $INCLUDE_OPTIONS TALLED_LIB" -c "$c" -o ".tmp/${c%.*}.o"
+        filesO="$filesO .tmp/${c%.*}.o""$USER_INS
     fi
 done
 
