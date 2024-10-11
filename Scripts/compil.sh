@@ -18,8 +18,8 @@
 
 # Some metadata
 readonly AUTHOR="Asha Geyon (Natpol50)"
-readonly VERSION="0.2"
-readonly LAST_REVISION="2024-10-08"
+readonly VERSION="0.3"
+readonly LAST_REVISION="2024-10-11"
 
 # /////////////////
 # //////SETUP//////
@@ -38,6 +38,12 @@ ANSWER=""
 UPLOADALL="N"
 DONTCLEAN="N"
 
+
+readonly ARDUINO_CORE_PATH="/usr/share/arduino/hardware/arduino/avr/cores/arduino"
+readonly ARDUINO_COREUNO_PATH="/usr/share/arduino/hardware/arduino/avr/variants/standard"
+readonly ARDUINO_LIBS_PATH="/usr/share/arduino/libraries"
+
+
 readonly LOG_FILE="$ORIGIN/logs/$(date +'%Y%m%d-%H%M%S').log"
 mkdir -p "$(dirname "$LOG_FILE")"
 
@@ -46,15 +52,6 @@ mkdir -p "$(dirname "$LOG_FILE")"
 # /////////////////
 
 log() {
-# log: Appends a log message to the log file with a timestamp.
-# 
-# Args:
-#   $1 (string): The message to be logged.
-#
-# Effects:
-#   Appends a line to the log file in the format "YYYY-MM-DD HH:MM:SS: message".
-
-
     local message="$1"
     local timestamp
     timestamp=$(date +"%Y-%m-%d %H:%M:%S")
@@ -62,13 +59,6 @@ log() {
 }
 
 x_in_array() {
-# x_in_array: Check if an element is present in an array.
-# 
-# Usage: x_in_array <element> <array_element1> <array_element2> ...
-# 
-# Returns 0 if the element is found in the array, 1 otherwise.
-
-
     local element="$1"
     shift  
     local array=("$@")
@@ -85,14 +75,9 @@ x_in_array() {
 # ////ARGUMENTS////
 # /////////////////
 
-
 # Here, we'll treat arguments.
 
-
 log "ACompilator started"
-
-
-
 
 # Reading the arguments and extracting the board list
 for arg in "$@"; do
@@ -112,9 +97,6 @@ done
 
 log "FOLDER value is : $FOLDER"
 log "SELECTION value is : $SELECTION"
-
-
-
 
 # Treating -v argument.
 if x_in_array "-v" "${ARGS_LIST[@]}"; then
@@ -183,7 +165,6 @@ Arguments :
     exit 0
 fi
 
-
 # Treating -y & -n arguments.
 if x_in_array "-y" "${ARGS_LIST[@]}"; then
     if x_in_array "-n" "${ARGS_LIST[@]}"; then
@@ -204,17 +185,11 @@ if x_in_array "-nocleanup" "${ARGS_LIST[@]}"; then
     DONTCLEAN="Y"
 fi
 
-
 # Treating -all argument.
 if x_in_array "-all" "${ARGS_LIST[@]}"; then
     log "got -all arg, setting UPLOADALL as Y"
     UPLOADALL="Y"
 fi
-
-
-
-
-
 
 # /////////////////
 # ///ACTUAL CODE///
@@ -299,40 +274,62 @@ done
 echo "---------------------------"
 echo -e "\033[32mEnvironment initialized successfully!\033[0m"
 
-
 echo "###############################"
-echo "Part 2, Compilation itself"
+echo "Part 2, Compilation"
 
-# Create object files for each C file
+# Compile Arduino core files
+echo "Compiling Arduino core files..."
+for file in "$ARDUINO_CORE_PATH"/*.cpp "$ARDUINO_COREUNO_PATH"/*.cpp; do
+    if [ -f "$file" ]; then
+    filename=$(basename "$file")
+    avr-g++ -c -g -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -flto -w -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" "$file" -o "$ORIGIN/.tmp/${filename%.*}.o"
+    echo "compiled $filename"
+    fi
+done
+
+echo "Compiling user files..."
 filesO=""
-
-echo -e "Files will include:\n$ARDUINO_CORE_PATH\n$ARDUINO_COREUNO_PATH\n${USER_INSTALLED_LIB[*]}"
-for c in *.c; do
+for c in *.c *.cpp *.ino; do
     if [ -f "$c" ]; then
-        avr-gcc -Os -DF_CPU=16000000UL -mmcu=atmega328p -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" $INCLUDE_OPTIONS -c "$c" -o "$ORIGIN/.tmp/${c%.*}.o"
+        echo "Compiling $c..."
+        if ! avr-g++ -c -g -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -flto -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" -o "$ORIGIN/.tmp/${c%.*}.o" "$c"; then
+            echo -e "\033[31mError compiling user file: $c\033[0m"
+            log "Error compiling user file: $c"
+            exit 1
+        fi
         filesO="$filesO $ORIGIN/.tmp/${c%.*}.o"
     fi
 done
 
 if [ -z "$filesO" ]; then
-    echo "No .c files found in the folder."
+    echo -e "\033[31m No .c, .cpp, or .ino files found in the folder.\033[0m"
     exit 1
+else 
+    echo "Compilation successful! The following files were compiled:"
+    for file in $filesO; do
+        echo "  - ${file##*/}"
+    done
 fi
 
-echo "Compiled files: $filesO"
+echo "---------------------------"
 
 echo "###############################"
 echo "Part 3, linking and build"
 
-avr-gcc -DF_CPU=16000000UL -mmcu=atmega328p $filesO -o "$ORIGIN/build/firmware.elf"
-
+echo "Linking and building firmware..."
+avr-gcc -w -Os -g -flto -fuse-linker-plugin -Wl,--gc-sections -mmcu=atmega328p -o "$ORIGIN/build/firmware.elf" $filesO -lm
+if [ $? -ne 0 ]; then
+    echo "Error during linking and building."
+    log "Error during linking and building."
+    exit 1
+fi
 echo "Build completed"
 
 echo "###############################"
 echo "Part 4, conversion to HEX file"
 
 avr-objcopy -O ihex -R .eeprom "$ORIGIN/build/firmware.elf" "$ORIGIN/build/firmware.hex"
-echo "Compilation to HEX file completed"
+echo "Conversion to HEX file completed"
 
 echo "###############################"
 echo "Part 5, uploading to Arduino"
