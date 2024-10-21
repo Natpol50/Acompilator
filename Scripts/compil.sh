@@ -247,17 +247,19 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo -e "\n \n###############################"
+echo -e "\n\n###############################\n\n"
 echo "Part 1, Initializing environment..."
 
 # Environment initialization
 echo "Initializing environment..."
+log "Starting environment initialization"
 echo "---------------------------"
 
 # Remove existing .tmp and build directories
 for dir in "$ORIGIN/.tmp" "$ORIGIN/build"; do
     if [ -d "$dir" ]; then
         echo "Removing existing $dir directory..."
+        log "Removing existing $dir directory"
         rm -rf "$dir" || { 
             echo -e "\033[31mError: Cannot delete $dir. Do you have the right permissions?\033[0m"
             log "Couldn't delete $dir"
@@ -270,6 +272,7 @@ done
 # Create new .tmp and build directories
 for dir in "$ORIGIN/.tmp" "$ORIGIN/build"; do
     echo "Creating $dir directory..."
+    log "Creating $dir directory"
     mkdir "$dir" || { 
         echo -e "\033[31mError: Cannot create $dir. Do you have the right permissions?\033[0m"
         log "Couldn't create $dir"
@@ -280,25 +283,37 @@ done
 
 echo "---------------------------"
 echo -e "\033[32mEnvironment initialized successfully!\033[0m"
+log "Environment seems to have correctly initialized."
 
-echo "###############################"
+echo -e "\n\n###############################\n\n"
 echo "Part 2, Compilation"
 
 # Compile Arduino core files
 echo "Compiling Arduino core files..."
+log "Starting Compilation on arduino core."
+echo "---------------------------"
 for file in "$ARDUINO_CORE_PATH"/*.cpp "$ARDUINO_CORE_PATH"/*.c "$ARDUINO_COREUNO_PATH"/*.cpp "$ARDUINO_COREUNO_PATH"/*.c; do
     if [ -f "$file" ]; then
     filename=$(basename "$file")
-    avr-g++ -c -g -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -flto -w -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" "$file" -o "$ORIGIN/.tmp/${filename%.*}.o"
-    echo "compiled $filename"
+    echo -e "\e[90mCompiling $filename...\e[0m"
+    log "Compiling $filename"
+    if ! avr-g++ -c -g -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -flto -w -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" "$file" -o "$ORIGIN/.tmp/${filename%.*}.o"; then
+            echo -e "\033[31mError compiling user file: $filename\033[0m"
+            log "Error compiling user file: $filename"
+            exit 1
+        fi
+    log "Compiled $filename"
     fi
 done
+echo -e "---------------------------"
+echo -e "\033[32mCompiled Arduino core successfully !\033[0m\n"
 
 echo "Compiling user files..."
+echo "---------------------------"
 filesO=""
 for c in *.c *.cpp *.ino; do
     if [ -f "$c" ]; then
-        echo "Compiling $c..."
+        echo -e "\e[90mCompiling $c...\e[0m"
         if ! avr-g++ -c -g -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -flto -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" -o "$ORIGIN/.tmp/${c%.*}.o" "$c"; then
             echo -e "\033[31mError compiling user file: $c\033[0m"
             log "Error compiling user file: $c"
@@ -307,21 +322,26 @@ for c in *.c *.cpp *.ino; do
         filesO="$filesO $ORIGIN/.tmp/${c%.*}.o"
     fi
 done
+echo -e "---------------------------"
+echo -e "\033[32mCompiled user files successfully !\033[0m\n"
 
 if [ -z "$filesO" ]; then
     echo -e "\033[31m No .c, .cpp, or .ino files found in the folder.\033[0m"
+    log "No .c, .cpp, or .ino files found in the folder."
     exit 1
 else 
     echo "Compilation successful! The following files were compiled:"
+    log "The following user files were compiled:"
     for file in $filesO; do
         echo "  - ${file##*/}"
+        log "  - ${file##*/}"
     done
 fi
 
-echo "---------------------------"
-
-echo "###############################"
+echo -e "\n\n###############################\n\n"
+echo -e "\n\n###############################\n\n"
 echo "Part 3, linking and build"
+log "Starting linking and build process"
 
 # Collect all object files
 filesO=""
@@ -332,14 +352,17 @@ for file in "$ORIGIN/.tmp"/*.o; do
 done
 
 echo "Linking and building firmware..."
+log "Linking and building firmware with object files: $filesO"
 if ! avr-gcc -w -Os -g -flto -fuse-linker-plugin -Wl,--gc-sections -mmcu=atmega328p \
 -o "$ORIGIN/build/firmware.elf" $filesO \
 -I"$ARDUINO_CORE_PATH" -L"$ARDUINO_CORE_PATH" -lm; then
     echo -e "\033[31mError during linking and building.\033[0m"
+    log "Error during linking and building"
     exit 1
 fi
 
-echo "Firmware built successfully!"
+echo -e "\033[32mFirmware built successfully!\033[0m"
+log "Firmware built successfully"
 
 echo "###############################"
 echo "Part 4, conversion to HEX file"
