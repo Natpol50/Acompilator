@@ -323,8 +323,6 @@ echo "---------------------------"
 echo "###############################"
 echo "Part 3, linking and build"
 
-echo "Linking and building firmware..."
-
 # Collect all object files
 filesO=""
 for file in "$ORIGIN/.tmp"/*.o; do
