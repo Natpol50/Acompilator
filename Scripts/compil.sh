@@ -25,8 +25,8 @@ command -v arduino-cli >/dev/null 2>&1 || { echo >&2 "arduino-cli is required bu
 
 # Some metadata
 readonly AUTHOR="Asha Geyon (Natpol50)"
-readonly VERSION="0.3"
-readonly LAST_REVISION="2024-10-11"
+readonly VERSION="0.8"
+readonly LAST_REVISION="2024-10-21"
 
 # /////////////////
 # //////SETUP//////
@@ -153,8 +153,8 @@ The script will automatically detect the c code files and compile them before up
 
 Arguments : 
 
--help- Displays help information (Use alone)
--h- Displays help information (Use alone)
+-help - Displays help information (Use alone)
+-h - Displays help information (Use alone)
 
 -v - Will print some informations about the script version (Use alone)
 
@@ -165,7 +165,7 @@ Arguments :
 -boards - Allows the user to preselect the board(s) he wants to upload to. (best used with -y, useless if used with -n) 
         Syntax : boards="number1 number 2 number3" (Example : boards="1 5 3")
 
-- all - Automatically select all available boards when trying to upload, overrides the boards argument. (best used with -y, useless if used with -n) 
+- all - Automatically select all available boards when trying to upload, overrides the boards, y and n arguments.
 
 -nocleanup - Allows the user to keep the .tmp and build folders and not just the logs.
     "
@@ -193,7 +193,7 @@ if x_in_array "-all" "${ARGS_LIST[@]}"; then
         echo "-all and -n argument conflicts, exiting"
         exit 1
     fi
-    log "got -all arg, setting UPLOADALL as Y"
+    log "got -all arg, setting ANSWER as A"
     ANSWER="A"
 fi
 
@@ -381,7 +381,8 @@ echo -e "\n\n###############################\n\n"
 
 echo "Part 4, conversion to HEX file"
 
-echo "Conversion to HEX file completed"
+echo "Starting conversion to HEX file ... "
+log "Starting conversion to HEX file ... "
 if ! avr-objcopy -O ihex -R .eeprom "$ORIGIN/build/firmware.elf" "$ORIGIN/build/firmware.hex"; then
     echo -e "---------------------------"
     echo -e "\033[31mError during ELF to GEX conversion.\033[0m"     # Say gex
@@ -392,7 +393,7 @@ fi
 
 
 echo -e "\033[32mConversion successfull !\033[0m"
-log "Firmware built successfully"
+log "Conversion was successfull !"
 
 
 
@@ -401,25 +402,31 @@ echo "Part 5, uploading to Arduino"
 
 
 while [[ ! "$ANSWER" =~ ^[YyNnAa]$ ]]; do
+    log "No pre-given answer, prompting user"
     echo "Do you want to upload this to the Arduino? [Y/N/A]"
     read -r ANSWER
     if [[ ! "$ANSWER" =~ ^[YyNnAa]$ ]]; then
+        log "User entered invalid answer, $ANSWER"
         echo "Answer is invalid. Please enter Y, N, or A:"
     fi
 done
 
 
 if [[ "$ANSWER" =~ ^[Nn]$ ]]; then
+    log "User requested not to upload to Arduino"
     echo "Alright, good luck with the rest!"
+    echo -e "\033[8mAfox out !\033[0m"
     exit 0
 elif [[ "$ANSWER" =~ ^[Yy]$ ]]; then
     echo "Detecting connected Arduino..."
+    log "Starting arduino uno board detection."
     
     # Get ports and board names
     mapfile -t boards < <(arduino-cli board list | grep tty | awk '{print $1, $6, $7}')
 
     while [ ${#boards[@]} -eq 0 ]; do
         echo "No Arduino detected. Make sure the Arduino is connected and press Enter..."
+        log "No arduino connected, prompting user"
         read -r
         mapfile -t boards < <(arduino-cli board list | grep tty | awk '{print $1, $6, $7}')
     done
@@ -441,6 +448,7 @@ elif [[ "$ANSWER" =~ ^[Yy]$ ]]; then
             for index in "${SELECTION_ARRAY[@]}"; do
             if [[ ! "$index" =~ ^[0-9]+$ ]] || [ "$index" -lt 0 ] || [ "$index" -ge ${#boards[@]} ]; then
                 echo "Selection is invalid, please select again."
+                log "Selection is invalid, prompting user."
                 valid_selection=false
                 break
             fi
@@ -450,12 +458,14 @@ elif [[ "$ANSWER" =~ ^[Yy]$ ]]; then
         # If no valid selection, ask for it
         if ! $valid_selection; then
             while ! $valid_selection; do
+                log "Prompting user for selection"
                 echo "Please select the Arduino(s) you want to upload to. You can select multiple (e.g., 0 2):"
                 read -r SELECTION
                 IFS=' ' read -r -a SELECTION_ARRAY <<< "$SELECTION"
                 valid_selection=true
                 for index in "${SELECTION_ARRAY[@]}"; do
                     if [[ ! "$index" =~ ^[0-9]+$ ]] || [ "$index" -lt 0 ] || [ "$index" -ge ${#boards[@]} ]; then
+                        log "Invalid selection: $index ,  reprompting user"
                         echo "Invalid selection: $index"
                         valid_selection=false
                         break
@@ -467,10 +477,13 @@ elif [[ "$ANSWER" =~ ^[Yy]$ ]]; then
         for index in "${SELECTION_ARRAY[@]}"; do
             PORT=$(echo "${boards[index]}" | awk '{print $1}')
             BOARD=$(echo "${boards[index]}" | awk '{print $2, $3}')
+            log "Selected board: $BOARD on $PORT, starting upload using avrdude."
             echo "Okay, $BOARD detected on $PORT. Starting upload via avrdude."
             if avrdude -V -F -p atmega328p -c arduino -b "$BAUDRATE" -P "$PORT" -U flash:w:"$ORIGIN/build/firmware.hex":i; then
+                log "Upload to $BOARD on $PORT successful!"
                 echo "Upload to $BOARD on $PORT successful!"
             else
+                log "Error during upload to $BOARD on $PORT."
                 echo "Error during upload to $BOARD on $PORT."
                 exit 1
             fi
@@ -478,6 +491,7 @@ elif [[ "$ANSWER" =~ ^[Yy]$ ]]; then
     else
         PORT=$(echo "${boards[0]}" | awk '{print $1}')
         BOARD=$(echo "${boards[0]}" | awk '{print $2, $3}')
+        log "Single board detected: $BOARD on $PORT, starting upload using avrdude."
         echo "Okay, $BOARD detected on $PORT. Starting upload via avrdude."
         if avrdude -V -F -p atmega328p -c arduino -b "$BAUDRATE" -P "$PORT" -U flash:w:"$ORIGIN/build/firmware.hex":i; then
             echo "Upload successful!"
@@ -487,12 +501,15 @@ elif [[ "$ANSWER" =~ ^[Yy]$ ]]; then
         fi
     fi
 elif [[ "$ANSWER" =~ ^[Aa]$ ]]; then
-    echo "Detecting connected Arduino..."
+    log "User requested to upload to all Arduinos"
+    log "Detecting All connected Arduinos..."
+    echo "Detecting connected Arduino(s)..."
 
     # Get ports and board names
     mapfile -t boards < <(arduino-cli board list | grep tty | awk '{print $1, $6, $7}')
 
     while [ ${#boards[@]} -eq 0 ]; do
+        log "No Arduino detected, prompting user"
         echo "No Arduino detected. Make sure the Arduino is connected and press Enter..."
         read -r
         mapfile -t boards < <(arduino-cli board list | grep tty | awk '{print $1, $6, $7}')
@@ -507,18 +524,22 @@ elif [[ "$ANSWER" =~ ^[Aa]$ ]]; then
     done
 
     if [ ${#uno_boards[@]} -eq 0 ]; then
-        echo "No Arduino Uno detected."
+        log "No Arduino Uno detected, exiting."
+        echo "No Arduino Uno detected., exiting"
         exit 1
     fi
 
     for uno_board in "${uno_boards[@]}"; do
         PORT=$(echo "$uno_board" | awk '{print $1}')
         BOARD=$(echo "$uno_board" | awk '{print $2, $3}')
+        log "$BOARD on $PORT, starting upload using avrdude."
         echo "Uploading to $BOARD on $PORT..."
 
         if avrdude -V -F -p atmega328p -c arduino -b "$BAUDRATE" -P "$PORT" -U flash:w:"$ORIGIN/build/firmware.hex":i; then
+            log "Upload to $BOARD on $PORT successful!"
             echo "Upload to $BOARD on $PORT successful!"
         else
+            log "Error during upload to $BOARD on $PORT."
             echo "Error during upload to $BOARD on $PORT."
             exit 1
         fi
@@ -547,4 +568,5 @@ fi
 echo -e "\n\n###############################\n\n"
 
 echo -e "Acompilator finished successfully! \nThanks for using it ! \n\033[8mAfox out !\033[0m"
+log "Acompilator finished successfully!"
 exit 0
