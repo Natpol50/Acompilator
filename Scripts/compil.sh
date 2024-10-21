@@ -11,9 +11,16 @@
 #      Boot - Code to initialize the script and check requirements.
 #      Configuration - Load configuration options or variables.
 #      Main Tasks - The main operations the script will perform.
-#      Cleanup - Actions taken after the main operations, like logging or cleanup.
+#      Cleanup - Actions taken after the main operations like cleanup.
 #
 # -----------------------------------------------------------------------------
+
+# Ensure necessary commands are available
+command -v avr-gcc >/dev/null 2>&1 || { echo >&2 "avr-gcc is required but it's not installed. Aborting."; exit 1; }
+command -v avr-g++ >/dev/null 2>&1 || { echo >&2 "avr-g++ is required but it's not installed. Aborting."; exit 1; }
+command -v avr-objcopy >/dev/null 2>&1 || { echo >&2 "avr-objcopy is required but it's not installed. Aborting."; exit 1; }
+command -v avrdude >/dev/null 2>&1 || { echo >&2 "avrdude is required but it's not installed. Aborting."; exit 1; }
+command -v arduino-cli >/dev/null 2>&1 || { echo >&2 "arduino-cli is required but it's not installed. Aborting."; exit 1; }
 
 
 # Some metadata
@@ -279,7 +286,7 @@ echo "Part 2, Compilation"
 
 # Compile Arduino core files
 echo "Compiling Arduino core files..."
-for file in "$ARDUINO_CORE_PATH"/*.cpp "$ARDUINO_COREUNO_PATH"/*.cpp; do
+for file in "$ARDUINO_CORE_PATH"/*.cpp "$ARDUINO_CORE_PATH"/*.c "$ARDUINO_COREUNO_PATH"/*.cpp "$ARDUINO_COREUNO_PATH"/*.c; do
     if [ -f "$file" ]; then
     filename=$(basename "$file")
     avr-g++ -c -g -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -flto -w -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" "$file" -o "$ORIGIN/.tmp/${filename%.*}.o"
@@ -317,13 +324,24 @@ echo "###############################"
 echo "Part 3, linking and build"
 
 echo "Linking and building firmware..."
-avr-gcc -w -Os -g -flto -fuse-linker-plugin -Wl,--gc-sections -mmcu=atmega328p -o "$ORIGIN/build/firmware.elf" $filesO -lm
-if [ $? -ne 0 ]; then
-    echo "Error during linking and building."
-    log "Error during linking and building."
+
+# Collect all object files
+filesO=""
+for file in "$ORIGIN/.tmp"/*.o; do
+    if [ -f "$file" ]; then
+        filesO="$filesO $file"
+    fi
+done
+
+echo "Linking and building firmware..."
+if ! avr-gcc -w -Os -g -flto -fuse-linker-plugin -Wl,--gc-sections -mmcu=atmega328p \
+-o "$ORIGIN/build/firmware.elf" $filesO \
+-I"$ARDUINO_CORE_PATH" -L"$ARDUINO_CORE_PATH" -lm; then
+    echo -e "\033[31mError during linking and building.\033[0m"
     exit 1
 fi
-echo "Build completed"
+
+echo "Firmware built successfully!"
 
 echo "###############################"
 echo "Part 4, conversion to HEX file"

@@ -55,3 +55,7 @@ dkms.conf
 *.c
 *.h
 *.log
+*.cpp
+*.o
+*.s
+*.S
