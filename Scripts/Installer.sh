@@ -27,13 +27,118 @@ print_warning() {
 
 print_header() {
     echo -e "\n${BOLD}╔════════════════════════════════════════╗${NC}"
-    echo -e "${BOLD}║        Acompil Installation Tool       ║${NC}"
+    echo -e "${BOLD}║        Acompil Installation Tool        ║${NC}"
     echo -e "${BOLD}╚════════════════════════════════════════╝${NC}\n"
 }
 
 # Function to check if script is run with sudo
 is_sudo() {
     return $(id -u)
+}
+
+# Function to check if arduino-cli exists in common locations
+check_arduino_cli() {
+    # Check in PATH
+    if command -v arduino-cli >/dev/null 2>&1; then
+        return 0
+    fi
+    
+    # Check common installation locations
+    local COMMON_LOCATIONS=(
+        "/usr/local/bin/arduino-cli"
+        "/usr/bin/arduino-cli"
+        "$HOME/bin/arduino-cli"
+        "$HOME/.local/bin/arduino-cli"
+        "/opt/arduino-cli"
+    )
+    
+    for location in "${COMMON_LOCATIONS[@]}"; do
+        if [ -x "$location" ]; then
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
+# Detect package manager
+detect_package_manager() {
+    if command -v apt-get >/dev/null; then
+        echo "apt"
+    elif command -v dnf >/dev/null; then
+        echo "dnf"
+    elif command -v yum >/dev/null; then
+        echo "yum"
+    elif command -v pacman >/dev/null; then
+        echo "pacman"
+    else
+        echo "unknown"
+    fi
+}
+
+# Function to install dependencies based on package manager
+install_dependencies() {
+    local PKG_MANAGER=$(detect_package_manager)
+    print_step "Installing dependencies"
+    
+    case $PKG_MANAGER in
+        "apt")
+            print_warning "Using apt package manager"
+            apt-get update
+            apt-get install -y gcc-avr g++-avr avr-libc avrdude
+            ;;
+        "dnf"|"yum")
+            print_warning "Using ${PKG_MANAGER} package manager"
+            $PKG_MANAGER install -y avr-gcc avr-gcc-c++ avr-libc avrdude
+            ;;
+        "pacman")
+            print_warning "Using pacman package manager"
+            pacman -Sy --noconfirm avr-gcc avr-libc avrdude
+            ;;
+        *)
+            print_error "Unsupported package manager. Please install dependencies manually:"
+            echo "- avr-gcc"
+            echo "- avr-g++"
+            echo "- avr-objcopy"
+            echo "- avrdude"
+            echo "- arduino-cli"
+            exit 1
+            ;;
+    esac
+}
+
+# Function to check dependencies
+check_dependencies() {
+    local MISSING_DEPS=0
+    local DEPS=("avr-gcc" "avr-g++" "avr-objcopy" "avrdude")
+    
+    print_step "Checking dependencies"
+    
+    # Check regular dependencies
+    for dep in "${DEPS[@]}"; do
+        if command -v $dep >/dev/null 2>&1; then
+            print_success "$dep is installed"
+        else
+            print_warning "$dep is not installed"
+            MISSING_DEPS=1
+        fi
+    done
+    
+    # Special check for arduino-cli
+    if check_arduino_cli; then
+        print_success "arduino-cli is installed"
+    else
+        print_warning "arduino-cli is not installed"
+        print_step "Installing arduino-cli"
+        curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+    fi
+    
+    if [ $MISSING_DEPS -eq 1 ]; then
+        print_step "Installing missing dependencies"
+        install_dependencies
+    else
+        print_success "All core dependencies are satisfied"
+    fi
 }
 
 # Print header
@@ -47,9 +152,12 @@ if ! is_sudo; then
     exit $?
 fi
 
+# Check and install dependencies
+check_dependencies
+
 # Define source and destination paths
 SOURCE_SCRIPT="Acompil.sh"
-DEST_PATH="/bin/Acompil"
+DEST_PATH="/bin/acompil"
 
 # Check if source script exists
 if [ ! -f "$SOURCE_SCRIPT" ]; then
@@ -111,6 +219,6 @@ else
 fi
 
 echo -e "\n${GREEN}╔════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║      Installation Complete! 🎉         ║${NC}"
+echo -e "${GREEN}║      Installation Complete! 🎉          ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
-echo -e "\n${BOLD}You can now run '${BLUE}Acompil${NC}${BOLD}' from anywhere in the system${NC}\n \n\033[8mAfox out !\033[0m"
+echo -e "\n${BOLD}You can now run '${BLUE}Acompil${NC}${BOLD}' from anywhere in the system${NC}\n"
