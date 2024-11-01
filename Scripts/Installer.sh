@@ -221,4 +221,4 @@ fi
 echo -e "\n${GREEN}╔════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║      Installation Complete! 🎉          ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
-echo -e "\n${BOLD}You can now run '${BLUE}Acompil${NC}${BOLD}' from anywhere in the system${NC}\n"
+echo -e "\n${BOLD}You can now run '${BLUE}Acompil${NC}${BOLD}' from anywhere in the system${NC}\n\033[8mAfox out !\033[0m"
