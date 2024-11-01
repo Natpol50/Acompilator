@@ -301,15 +301,15 @@ log "Starting Compilation on arduino core."
 echo "---------------------------"
 for file in "$ARDUINO_CORE_PATH"/*.cpp "$ARDUINO_CORE_PATH"/*.c "$ARDUINO_COREUNO_PATH"/*.cpp "$ARDUINO_COREUNO_PATH"/*.c; do
     if [ -f "$file" ]; then
-    filename=$(basename "$file")
-    echo -e "\e[90mCompiling $filename...\e[0m"
-    log "Compiling $filename"
-    if ! avr-g++ -c -g -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -flto -w -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" "$file" -o "$ORIGIN/.tmp/${filename%.*}.o"; then
-            echo -e "\033[31mError compiling user file: $filename\033[0m"
+        filename=$(basename "$file")
+        echo -e "\e[90mCompiling $filename...\e[0m"
+        log "Compiling $filename"
+        if ! avr-g++ -c -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" "$file" -o "$ORIGIN/.tmp/${filename%.*}.o"; then
+            echo -e "\033[31mError compiling core file: $filename\033[0m"
             log "Error compiling user file: $filename"
             exit 1
         fi
-    log "Compiled $filename"
+        log "Compiled $filename"
     fi
 done
 echo -e "---------------------------"
@@ -321,7 +321,7 @@ filesO=""
 for c in *.c *.cpp *.ino; do
     if [ -f "$c" ]; then
         echo -e "\e[90mCompiling $c...\e[0m"
-        if ! avr-g++ -c -g -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -flto -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" -o "$ORIGIN/.tmp/${c%.*}.o" "$c"; then
+        if ! avr-g++ -c -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" -o "$ORIGIN/.tmp/${c%.*}.o" "$c"; then
             echo -e "\033[31mError compiling user file: $c\033[0m"
             log "Error compiling user file: $c"
             exit 1
