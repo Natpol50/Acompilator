@@ -27,13 +27,41 @@ print_warning() {
 
 print_header() {
     echo -e "\n${BOLD}╔════════════════════════════════════════╗${NC}"
-    echo -e "${BOLD}║        Acompil Installation Tool        ║${NC}"
+    echo -e "${BOLD}║        Acompil Installation Tool       ║${NC}"
     echo -e "${BOLD}╚════════════════════════════════════════╝${NC}\n"
 }
 
 # Function to check if script is run with sudo
 is_sudo() {
     return $(id -u)
+}
+
+# Function to install arduino-cli
+install_arduino_cli() {
+    print_step "Installing arduino-cli"
+    
+    # Create temporary directory
+    local TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR"
+    
+    # Download and install arduino-cli
+    curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+    
+    # Move to system binary location
+    if [ -f "./bin/arduino-cli" ]; then
+        mv "./bin/arduino-cli" "/usr/local/bin/arduino-cli"
+        chmod 755 "/usr/local/bin/arduino-cli"
+        print_success "Arduino CLI installed to /usr/local/bin"
+    else
+        print_error "Failed to install arduino-cli"
+        return 1
+    fi
+    
+    # Cleanup
+    cd - > /dev/null
+    rm -rf "$TEMP_DIR"
+    
+    return 0
 }
 
 # Function to check if arduino-cli exists in common locations
@@ -129,8 +157,7 @@ check_dependencies() {
         print_success "arduino-cli is installed"
     else
         print_warning "arduino-cli is not installed"
-        print_step "Installing arduino-cli"
-        curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+        install_arduino_cli
     fi
     
     if [ $MISSING_DEPS -eq 1 ]; then
@@ -157,7 +184,7 @@ check_dependencies
 
 # Define source and destination paths
 SOURCE_SCRIPT="Acompil.sh"
-DEST_PATH="/bin/acompil"
+DEST_PATH="/bin/Acompil"
 
 # Check if source script exists
 if [ ! -f "$SOURCE_SCRIPT" ]; then
@@ -219,6 +246,7 @@ else
 fi
 
 echo -e "\n${GREEN}╔════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║      Installation Complete! 🎉          ║${NC}"
+echo -e "${GREEN}║      Installation Complete! 🎉         ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
 echo -e "\n${BOLD}You can now run '${BLUE}Acompil${NC}${BOLD}' from anywhere in the system${NC}\n\033[8mAfox out !\033[0m"
+echo -e "\033[2mYou should start with Acompil -h\033[0m\n"
