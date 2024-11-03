@@ -25,18 +25,20 @@ command -v arduino-cli >/dev/null 2>&1 || { echo >&2 "arduino-cli is required bu
 
 # Some metadata
 readonly AUTHOR="Asha Geyon (Natpol50)"
-readonly VERSION="0.8"
-readonly LAST_REVISION="2024-10-21"
+readonly VERSION="0.9"
+readonly LAST_REVISION="2024-11-03"
 
 # /////////////////
 # //////SETUP//////
 # /////////////////
 
 readonly BAUDRATE="115200"
-readonly SUPPORTED_ARGS=(-v -p -y -boards -n -help -h -all -nocleanup) 
+readonly SUPPORTED_ARGS=(-v -p -y -boards -n -help -h -all -nocleanup -programversion -batch) 
 readonly YESNOOPTIONS=("N" "n" "Y" "y")
 readonly ORIGIN=$(pwd)
 
+PROGRAM_VERSION=0
+BATCH_NUMBER=0
 
 ARGS_LIST=()
 FOLDER=""
@@ -99,12 +101,21 @@ for arg in "$@"; do
     elif [ "$current_arg" == "-boards" ]; then
         SELECTION="${arg#*=}"
         ANSWER="Y"
+    elif [ "$current_arg" == "-programversion" ]; then
+        PROGRAM_VERSION=${arg#*=}
+        log "Program version set to: $PROGRAM_VERSION"
+    elif [ "$current_arg" == "-batch" ]; then
+        BATCH_NUMBER=${arg#*=}
+        log "Batch number set to: $BATCH_NUMBER"
     fi
 done
 
 log "FOLDER value is : $FOLDER"
 IFS=' ' read -r -a SELECTION_ARRAY <<< "$SELECTION"
 log "SELECTION value is : ${SELECTION_ARRAY[*]}"
+log "Program version is : $PROGRAM_VERSION"
+log "Batch number is : $BATCH_NUMBER"
+
 
 # Treating -v argument.
 if x_in_array "-v" "${ARGS_LIST[@]}"; then
@@ -163,11 +174,17 @@ Arguments :
 -n - Will automatically refuse the script upload prompt. (Do not use with -y)
 
 -boards - Allows the user to preselect the board(s) he wants to upload to. (best used with -y, useless if used with -n) 
-        Syntax : boards="number1 number 2 number3" (Example : boards="1 5 3")
+        Syntax : boards=\"number1 number 2 number3\" (Example : boards=\"1 5 3\")
 
-- all - Automatically select all available boards when trying to upload, overrides the boards, y and n arguments.
+-all - Automatically select all available boards when trying to upload, overrides the boards, y and n arguments.
 
 -nocleanup - Allows the user to keep the .tmp and build folders and not just the logs.
+
+-batch - Allows the user to define a value for the WWWW_BATCH constant of the compiled program.
+	Syntax : batch=number (Example : batch=3884)
+
+-programversion - Allows the user to define a value for the WWWW_VERSION constant of the compiled program.
+	Syntax : programversion=number (Example : programversion=0.9)
     "
 
     exit 0
@@ -321,7 +338,7 @@ filesO=""
 for c in *.c *.cpp *.ino; do
     if [ -f "$c" ]; then
         echo -e "\e[90mCompiling $c...\e[0m"
-        if ! avr-g++ -c -Os -w -std=gnu++11 -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" -o "$ORIGIN/.tmp/${c%.*}.o" "$c"; then
+        if ! avr-g++ -c -Os -w -std=gnu++11 -DWWWW_VERSION=\"${PROGRAM_VERSION}\" -DWWWW_BATCH=\"${BATCH_NUMBER}\" -DCOMPILER_VERSION=\"${VERSION}\" -fpermissive -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -Wno-error=narrowing -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=10812 -DARDUINO_AVR_UNO -DARDUINO_ARCH_AVR -I"$ARDUINO_CORE_PATH" -I"$ARDUINO_COREUNO_PATH" -I"$ARDUINO_LIBS_PATH" -o "$ORIGIN/.tmp/${c%.*}.o" "$c"; then
             echo -e "\033[31mError compiling user file: $c\033[0m"
             log "Error compiling user file: $c"
             exit 1
@@ -362,7 +379,7 @@ log "Linking and building firmware with object files:"
 for obj_file in $filesO; do
     log "  - $obj_file"
 done
-if ! avr-gcc -w -Os -g -flto -fuse-linker-plugin -Wl,--gc-sections -mmcu=atmega328p \
+if ! avr-gcc -w -Os -g -flto -DWWWW_VERSION=\"${PROGRAM_VERSION}\" -DWWWW_BATCH=\"${BATCH_NUMBER}\" -DCOMPILER_VERSION=\"${VERSION}\" -fuse-linker-plugin -Wl,--gc-sections -mmcu=atmega328p \
 -o "$ORIGIN/build/firmware.elf" $filesO \
 -I"$ARDUINO_CORE_PATH" -L"$ARDUINO_CORE_PATH" -lm; then
     echo -e "---------------------------"
