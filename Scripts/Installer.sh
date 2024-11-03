@@ -36,9 +36,69 @@ is_sudo() {
     return $(id -u)
 }
 
+# Function to copy Arduino folder contents
+copy_arduino_folder() {
+    print_step "Copying Arduino hardware files"
+    
+    # Define source and destination paths
+    local ARDUINO_SOURCE="./arduino"
+    local ARDUINO_DEST="/usr/share/arduino/hardware/arduino"
+    
+    # Check if source directory exists
+    if [ ! -d "$ARDUINO_SOURCE" ]; then
+        print_error "Arduino source folder not found in current directory"
+        return 1
+    fi
+    
+    # Create destination directory if it doesn't exist
+    mkdir -p "$ARDUINO_DEST"
+    
+    # Copy contents
+    if cp -r "$ARDUINO_SOURCE/"* "$ARDUINO_DEST/"; then
+        print_success "Arduino files copied successfully to $ARDUINO_DEST"
+    else
+        print_error "Failed to copy Arduino files"
+        return 1
+    fi
+    
+    # Set appropriate permissions
+    chmod -R 755 "$ARDUINO_DEST"
+    
+    return 0
+}
+
+# Function to install curl based on package manager
+install_curl() {
+    local PKG_MANAGER=$(detect_package_manager)
+    print_step "Installing curl"
+    
+    case $PKG_MANAGER in
+        "apt")
+            apt-get update
+            apt-get install -y curl
+            ;;
+        "dnf"|"yum")
+            $PKG_MANAGER install -y curl
+            ;;
+        "pacman")
+            pacman -Sy --noconfirm curl
+            ;;
+        *)
+            print_error "Unsupported package manager. Please install curl manually."
+            exit 1
+            ;;
+    esac
+}
+
 # Function to install arduino-cli
 install_arduino_cli() {
     print_step "Installing arduino-cli"
+    
+    # Check if curl is installed
+    if ! command -v curl >/dev/null 2>&1; then
+        print_warning "curl is not installed. Installing curl first..."
+        install_curl
+    fi
     
     # Create temporary directory
     local TEMP_DIR=$(mktemp -d)
@@ -113,7 +173,9 @@ install_dependencies() {
         "apt")
             print_warning "Using apt package manager"
             apt-get update
-            apt-get install -y gcc-avr g++-avr avr-libc avrdude
+            apt-get install -y gcc build-essential
+            apt-get install -y gcc-avr binutils-avr avr-libc gdb-avr
+            apt-get install -y avrdude
             ;;
         "dnf"|"yum")
             print_warning "Using ${PKG_MANAGER} package manager"
@@ -198,6 +260,12 @@ if cp "$SOURCE_SCRIPT" "$DEST_PATH"; then
     print_success "File copied successfully"
 else
     print_error "Failed to copy file"
+    exit 1
+fi
+
+# Copy Arduino folder contents
+if ! copy_arduino_folder; then
+    print_error "Failed to copy Arduino files"
     exit 1
 fi
 
