@@ -25,8 +25,8 @@ command -v arduino-cli >/dev/null 2>&1 || { echo >&2 "arduino-cli is required bu
 
 # Some metadata
 readonly AUTHOR="Asha Geyon (Natpol50)"
-readonly VERSION="0.9"
-readonly LAST_REVISION="2024-11-03"
+readonly VERSION="1.0"
+readonly LAST_REVISION="2024-11-05"
 
 # /////////////////
 # //////SETUP//////
@@ -163,28 +163,26 @@ To use it, simply run the script in the folder in which the c code you want to u
 The script will automatically detect the c code files and compile them before uploading it.
 
 Arguments : 
+-help,-h		Displays help information (Use alone)
 
--help - Displays help information (Use alone)
--h - Displays help information (Use alone)
+-v			Prints some informations about the script version (Use alone)
 
--v - Will print some informations about the script version (Use alone)
+-y			Will automatically accept the script upload prompt. (Do not use with -n)
 
--y - Will automatically accept the script upload prompt. (Do not use with -n)
+-n			Will automatically refuse the script upload prompt. (Do not use with -y)
 
--n - Will automatically refuse the script upload prompt. (Do not use with -y)
+-boards			Allows the user to preselect the board(s) he wants to upload to. (best used with -y, useless if used with -n) 
+        		Syntax : boards=\"number1 number 2 number3\" (Example : boards=\"1 5 3\")
 
--boards - Allows the user to preselect the board(s) he wants to upload to. (best used with -y, useless if used with -n) 
-        Syntax : boards=\"number1 number 2 number3\" (Example : boards=\"1 5 3\")
+-all			Automatically select all available boards when trying to upload, overrides the boards, y and n arguments.
 
--all - Automatically select all available boards when trying to upload, overrides the boards, y and n arguments.
+-nocleanup		Allows the user to keep the .tmp and build folders and not just the logs.
 
--nocleanup - Allows the user to keep the .tmp and build folders and not just the logs.
+-batch			Allows the user to define a value for the WWWW_BATCH constant of the compiled program.
+			Syntax : batch=number (Example : batch=3884)
 
--batch - Allows the user to define a value for the WWWW_BATCH constant of the compiled program.
-	Syntax : batch=number (Example : batch=3884)
-
--programversion - Allows the user to define a value for the WWWW_VERSION constant of the compiled program.
-	Syntax : programversion=number (Example : programversion=0.9)
+-programversion		Allows the user to define a value for the WWWW_VERSION constant of the compiled program.
+			Syntax : programversion=number (Example : programversion=0.9)
     "
 
     exit 0
